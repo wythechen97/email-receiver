@@ -1,17 +1,15 @@
-const state = { token: sessionStorage.getItem("gmx-api-token") || "", accounts: [], selectedAccount: null, messages: [] };
+const state = { user: null, accounts: [], selectedAccount: null, messages: [], authMode: "login" };
 const $ = (selector, root = document) => root.querySelector(selector);
-const tokenInput = $("#api-token");
 const accountNoteInput = $("#account-note");
 const accountEmailInput = $("#account-email-input");
 const accountPasswordInput = $("#account-password-input");
-tokenInput.value = state.token;
 
 function setConnectionStatus(text, kind = "") { const status = $("#connection-status"); status.textContent = text; status.className = `status ${kind}`; }
 function formatDate(value) { return value ? new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "尚未收件"; }
 async function api(path, options = {}) {
-  if (!state.token) throw new Error("请先填入本地 API 令牌并连接。");
-  const response = await fetch(path, { ...options, headers: { Authorization: `Bearer ${state.token}`, "Content-Type": "application/json", ...(options.headers || {}) } });
+  const response = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
   const payload = await response.json().catch(() => null);
+  if (response.status === 401 && path !== "/api/auth/me") showAuth();
   if (!response.ok || !payload?.ok) { const error = payload?.error || {}; throw new Error(`${error.message || "本地服务请求失败。"}${error.detail ? `\n诊断：${error.detail}` : ""}`); }
   return payload;
 }
@@ -24,7 +22,19 @@ function setView(name) {
   const mailboxOpen = name === "mailboxes";
   mailboxMenu.classList.toggle("hidden", !mailboxOpen);
   mailboxButton.setAttribute("aria-expanded", String(mailboxOpen));
-  if (name === "mailboxes" && state.token) loadAccounts().catch((error) => setConnectionStatus(error.message, "error"));
+  if (name === "mailboxes" && state.user) loadAccounts().catch((error) => setConnectionStatus(error.message, "error"));
+}
+
+function showAuth() {
+  state.user = null; state.accounts = []; state.selectedAccount = null; state.messages = [];
+  $("#app-shell").classList.add("hidden"); $("#auth-view").classList.remove("hidden");
+}
+
+async function showApp(user) {
+  state.user = user;
+  $("#signed-in-user").textContent = `已登录：${user.username}`;
+  $("#auth-view").classList.add("hidden"); $("#app-shell").classList.remove("hidden");
+  await loadAccounts();
 }
 
 async function loadAccounts() {
@@ -52,11 +62,31 @@ function renderAccounts() {
   }
 }
 
+async function loadProxyEgress(account) {
+  const proxyEgressInfo = $("#proxy-egress-info");
+  try {
+    const result = await api(`/api/accounts/${encodeURIComponent(account.id)}/egress`);
+    if (state.selectedAccount?.id !== account.id || state.selectedAccount?.proxy?.sessionId !== result.egress.sessionId) return;
+    proxyEgressInfo.textContent = `当前出口 IP：${result.egress.ip} · Session ${result.egress.sessionId} · 已验证`;
+  } catch (error) {
+    if (state.selectedAccount?.id === account.id) proxyEgressInfo.textContent = `当前出口查询失败：${error.message}`;
+  }
+}
+
 async function selectAccount(account, shouldRender = true) {
   state.selectedAccount = account;
   state.messages = [];
   $("#mailbox-title").textContent = account.email;
   $("#mailbox-subtitle").textContent = account.enabled ? "已打开邮箱 · 邮件内容保存在本地" : "此账号已停用，无法收取新邮件。";
+  const proxyEgressInfo = $("#proxy-egress-info");
+  if (account.proxy) {
+    proxyEgressInfo.textContent = `正在确认当前出口 IP · Session ${account.proxy.sessionId}…`;
+    proxyEgressInfo.hidden = false;
+    void loadProxyEgress(account);
+  } else {
+    proxyEgressInfo.textContent = "";
+    proxyEgressInfo.hidden = true;
+  }
   accountNoteInput.disabled = false;
   accountNoteInput.value = account.note || "";
   setNoteStatus("");
@@ -143,7 +173,41 @@ async function saveAccountNote() {
   }
 }
 
-$("#connect-button").addEventListener("click", async () => { state.token = tokenInput.value.trim(); sessionStorage.setItem("gmx-api-token", state.token); try { await loadAccounts(); } catch (error) { sessionStorage.removeItem("gmx-api-token"); setConnectionStatus(error.message, "error"); } });
+$("#auth-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const result = $("#auth-result"); const button = $("#auth-submit");
+  const username = $("#auth-username").value.trim(); const password = $("#auth-password").value;
+  button.disabled = true; result.textContent = "正在处理…"; result.className = "form-message";
+  try {
+    const response = await api(`/api/auth/${state.authMode}`, { method: "POST", body: JSON.stringify({ username, password }) });
+    $("#auth-password").value = "";
+    await showApp(response.user);
+  } catch (error) { result.textContent = error.message; result.className = "form-message error"; }
+  finally { button.disabled = false; }
+});
+document.querySelectorAll(".auth-tab").forEach((tab) => tab.addEventListener("click", () => {
+  state.authMode = tab.dataset.authMode;
+  document.querySelectorAll(".auth-tab").forEach((item) => {
+    item.classList.toggle("active", item === tab);
+    item.setAttribute("aria-selected", String(item === tab));
+  });
+  const registering = state.authMode === "register";
+  $("#auth-kicker").textContent = registering ? "CREATE YOUR SPACE" : "WELCOME BACK";
+  $("#auth-title").textContent = registering ? "创建你的工作台" : "登录你的工作台";
+  $("#auth-intro").textContent = registering ? "创建一个本地账户，开始独立管理你的 GMX 邮箱。" : "输入本地账户凭据，继续管理你的邮箱。";
+  $("#auth-submit").textContent = registering ? "创建账户并继续" : "登录并继续";
+  $("#auth-helper").textContent = registering ? "至少 8 个字符，建议使用独特密码。" : "至少 8 个字符。";
+  $("#auth-password").autocomplete = state.authMode === "login" ? "current-password" : "new-password";
+  $("#auth-result").textContent = "";
+}));
+$("#password-toggle").addEventListener("click", () => {
+  const input = $("#auth-password");
+  const visible = input.type === "text";
+  input.type = visible ? "password" : "text";
+  $("#password-toggle").setAttribute("aria-pressed", String(!visible));
+  $("#password-toggle").setAttribute("aria-label", visible ? "显示密码" : "隐藏密码");
+});
+$("#logout-button").addEventListener("click", async () => { try { await api("/api/auth/logout", { method: "POST" }); } finally { showAuth(); } });
 $("#refresh-button").addEventListener("click", () => loadAccounts().catch((error) => setConnectionStatus(error.message, "error")));
 $("#fetch-button").addEventListener("click", fetchMessages); $("#renew-session-button").addEventListener("click", renewSession);
 accountNoteInput.addEventListener("blur", saveAccountNote);
@@ -198,4 +262,4 @@ $("#import-button").addEventListener("click", async () => {
   }
 });
 document.querySelectorAll(".nav-item").forEach((item) => item.addEventListener("click", () => setView(item.dataset.view)));
-if (state.token) loadAccounts().catch((error) => setConnectionStatus(error.message, "error"));
+api("/api/auth/me").then((result) => showApp(result.user)).catch(() => showAuth());

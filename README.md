@@ -21,7 +21,7 @@ npm start
 ```bash
 cd /volume1/docker/email-receiver
 cp .env.example .env
-# 编辑 .env，填入 ACCOUNT_ENCRYPTION_KEY、LOCAL_API_TOKEN 和代理配置
+# 编辑 .env，填入 ACCOUNT_ENCRYPTION_KEY 和代理配置
 docker compose up -d --build
 ```
 
@@ -43,10 +43,10 @@ docker compose down   # 仅停止和删除容器，不会删除 ./data 中的数
 
 ## 管理界面
 
-启动后打开 [http://127.0.0.1:8787](http://127.0.0.1:8787)，输入 `.env` 中的 `LOCAL_API_TOKEN` 并点击“连接”。界面支持：
+启动后打开 [http://127.0.0.1:8787](http://127.0.0.1:8787)，注册首个本地用户并登录。每个用户只能查看、添加和操作自己名下的 GMX 账号与邮件；登录会话通过同源 HttpOnly Cookie 保存。界面支持：
 
 - 通过表单单个添加账号，或使用 `邮箱----IMAP 密码` 格式批量导入账号（也兼容 `邮箱 | IMAP 密码`）；
-- 查看每个账号自动绑定的唯一代理 session；
+- 在 MAILBOX 中查看每个账号当前代理 Session 实际对外使用的公网出口 IP；
 - 按账号更换代理出口（生成新的唯一 session）；
 - 启用或停用账号；
 - 点击“收取邮件”时才建立一次 IMAP 连接，完成后立即断开；
@@ -55,7 +55,19 @@ docker compose down   # 仅停止和删除容器，不会删除 ./data 中的数
 - 每封新收取邮件会保存对应的代理出口地址、端口和 Session 标识，并在详情中显示。
 - 默认在隔离的 HTML frame 中预览富文本正文；纯文本邮件自动使用纯文本视图。
 
-## 导入账号
+## 多用户与导入账号
+
+不再使用 `LOCAL_API_TOKEN`。用户密码以 Node.js `scrypt` 哈希保存；GMX IMAP 密码仍使用
+`ACCOUNT_ENCRYPTION_KEY` 以 AES-256-GCM 加密保存。若从旧版升级，首位注册用户会自动认领原有
+未归属的邮箱和邮件，以避免数据丢失。
+
+如需用脚本调用 API，先注册或登录并保存 Cookie：
+
+```bash
+curl -c cookies.txt -X POST http://127.0.0.1:8787/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"your-user","password":"your-login-password"}'
+```
 
 每次导入均会生成并持久化唯一的 `proxySessionId`，以自动构造代理用户名：
 
@@ -65,7 +77,7 @@ USERNAME-zone-custom-region-US-session-{sessionId}-sessTime-20
 
 ```bash
 curl -X POST http://127.0.0.1:8787/api/accounts/import \
-  -H "Authorization: Bearer $LOCAL_API_TOKEN" \
+  -b cookies.txt \
   -H "Content-Type: application/json" \
   -d '{
     "accounts": [
@@ -83,7 +95,7 @@ curl -X POST http://127.0.0.1:8787/api/accounts/import \
 
 ```bash
 curl -X POST "http://127.0.0.1:8787/api/accounts/<ACCOUNT_ID>/fetch" \
-  -H "Authorization: Bearer $LOCAL_API_TOKEN" \
+  -b cookies.txt \
   -H "Content-Type: application/json" \
   -d '{ "limit": 10 }'
 ```
@@ -94,7 +106,7 @@ curl -X POST "http://127.0.0.1:8787/api/accounts/<ACCOUNT_ID>/fetch" \
 
 ```bash
 curl -X POST http://127.0.0.1:8787/api/accounts/<ACCOUNT_ID>/disable \
-  -H "Authorization: Bearer $LOCAL_API_TOKEN"
+  -b cookies.txt
 ```
 
 停用后手动收件会被拒绝。重新启用时将 `disable` 改为 `enable`。

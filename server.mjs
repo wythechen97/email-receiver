@@ -2,10 +2,12 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
+import tls from "node:tls";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
+import { SocksClient } from "socks";
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const dataDir = path.join(rootDir, "data");
@@ -16,7 +18,6 @@ const uiDir = path.join(rootDir, "ui");
 const config = {
   port: Number(process.env.PORT || 8787),
   host: process.env.HOST || "127.0.0.1",
-  apiToken: requiredEnv("LOCAL_API_TOKEN"),
   encryptionKey: Buffer.from(requiredEnv("ACCOUNT_ENCRYPTION_KEY"), "base64"),
   proxyHost: requiredEnv("PROXY_HOST"),
   proxyPort: Number(process.env.PROXY_PORT || 10000),
@@ -35,10 +36,12 @@ if (!config.proxyUsernameTemplate.includes("{sessionId}")) {
   throw new Error("PROXY_USERNAME_TEMPLATE 必须包含 {sessionId}。");
 }
 
-let accountStore = { version: 1, accounts: [] };
+let accountStore = { version: 2, users: [], accounts: [] };
 let mailDatabase;
 const activeFetches = new Set();
 let saveQueue = Promise.resolve();
+const sessions = new Map();
+const sessionLifetimeMs = 30 * 24 * 60 * 60 * 1000;
 
 function requiredEnv(name) {
   const value = process.env[name];
@@ -54,6 +57,13 @@ async function initializeStore() {
     if (!Array.isArray(accountStore.accounts)) throw new Error("accounts 不是数组");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+    await saveStore();
+  }
+
+  // 兼容旧版单用户数据：注册第一个用户时会认领这些无归属账号。
+  if (!Array.isArray(accountStore.users)) accountStore.users = [];
+  if (accountStore.version !== 2) {
+    accountStore.version = 2;
     await saveStore();
   }
 
@@ -167,6 +177,53 @@ function getProxyUrl(sessionId) {
   return proxyUrl.toString();
 }
 
+function readResponse(socket, timeoutMs = 12_000) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const timeout = setTimeout(() => {
+      socket.destroy();
+      reject(new Error("出口 IP 查询超时。"));
+    }, timeoutMs);
+    socket.on("data", (chunk) => chunks.push(chunk));
+    socket.once("end", () => { clearTimeout(timeout); resolve(Buffer.concat(chunks).toString("utf8")); });
+    socket.once("error", (error) => { clearTimeout(timeout); reject(error); });
+  });
+}
+
+async function resolveProxyEgress(account) {
+  let proxySocket;
+  let secureSocket;
+  try {
+    const connection = await SocksClient.createConnection({
+      command: "connect",
+      proxy: {
+        host: config.proxyHost,
+        port: config.proxyPort,
+        type: 5,
+        userId: getProxyUsername(account.proxySessionId),
+        password: config.proxyPassword
+      },
+      destination: { host: "api.ipify.org", port: 443 }
+    });
+    proxySocket = connection.socket;
+    secureSocket = tls.connect({ socket: proxySocket, servername: "api.ipify.org", rejectUnauthorized: true });
+    await new Promise((resolve, reject) => {
+      secureSocket.once("secureConnect", resolve);
+      secureSocket.once("error", reject);
+    });
+    const responsePromise = readResponse(secureSocket);
+    secureSocket.end("GET /?format=json HTTP/1.1\r\nHost: api.ipify.org\r\nConnection: close\r\nAccept: application/json\r\n\r\n");
+    const response = await responsePromise;
+    const [, body = ""] = response.split("\r\n\r\n", 2);
+    const ip = JSON.parse(body).ip;
+    if (typeof ip !== "string" || !ip) throw new Error("出口 IP 服务返回了无效响应。");
+    return { ip, checkedAt: new Date().toISOString(), sessionId: account.proxySessionId };
+  } finally {
+    secureSocket?.destroy();
+    proxySocket?.destroy();
+  }
+}
+
 function publicAccount(account) {
   return {
     id: account.id,
@@ -204,11 +261,56 @@ async function serveUiFile(response, filename, contentType) {
   response.end(content);
 }
 
-function isAuthorized(request) {
-  const supplied = request.headers.authorization?.replace(/^Bearer\s+/i, "") || "";
-  const expected = Buffer.from(config.apiToken);
-  const actual = Buffer.from(supplied);
+function parseCookies(request) {
+  return Object.fromEntries((request.headers.cookie || "").split(";").flatMap((part) => {
+    const index = part.indexOf("=");
+    return index < 0 ? [] : [[part.slice(0, index).trim(), decodeURIComponent(part.slice(index + 1).trim())]];
+  }));
+}
+
+function getCurrentUser(request) {
+  const token = parseCookies(request).mail_session;
+  const session = token && sessions.get(token);
+  if (!session || session.expiresAt <= Date.now()) {
+    if (token) sessions.delete(token);
+    return null;
+  }
+  return accountStore.users.find((user) => user.id === session.userId) || null;
+}
+
+function createSession(userId) {
+  const token = crypto.randomBytes(32).toString("base64url");
+  sessions.set(token, { userId, expiresAt: Date.now() + sessionLifetimeMs });
+  return token;
+}
+
+function setSessionCookie(response, token) {
+  response.setHeader("Set-Cookie", `mail_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(sessionLifetimeMs / 1000)}`);
+}
+
+function clearSessionCookie(response) {
+  response.setHeader("Set-Cookie", "mail_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("base64")) {
+  const hash = crypto.scryptSync(password, salt, 64).toString("base64");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  const [salt, expectedHash] = String(stored).split(":");
+  if (!salt || !expectedHash) return false;
+  const actual = Buffer.from(crypto.scryptSync(password, salt, 64).toString("base64"));
+  const expected = Buffer.from(expectedHash);
   return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function ownedAccounts(userId) {
+  return accountStore.accounts.filter((account) => account.ownerId === userId);
+}
+
+function getOwnedAccount(userId, accountId) {
+  return accountStore.accounts.find((account) => account.id === accountId && account.ownerId === userId);
 }
 
 async function readJson(request, maxBytes = 1024 * 1024) {
@@ -386,21 +488,82 @@ async function handleRequest(request, response) {
     return serveUiFile(response, "styles.css", "text/css; charset=utf-8");
   }
 
-  if (!isAuthorized(request)) {
-    return sendJson(response, 401, { ok: false, error: { code: "UNAUTHORIZED" } });
+  if (request.method === "POST" && request.url === "/api/auth/register") {
+    const payload = await readJson(request);
+    const username = typeof payload.username === "string" ? payload.username.trim().toLowerCase() : "";
+    const password = typeof payload.password === "string" ? payload.password : "";
+    if (!/^[a-z0-9][a-z0-9_.-]{2,31}$/i.test(username)) {
+      throw new HttpError(400, "INVALID_USERNAME", "用户名应为 3–32 个字母、数字或 . _ -。");
+    }
+    if (password.length < 8 || password.length > 200) {
+      throw new HttpError(400, "INVALID_PASSWORD", "密码长度应为 8–200 个字符。");
+    }
+    if (accountStore.users.some((user) => user.username === username)) {
+      throw new HttpError(409, "USERNAME_TAKEN", "该用户名已被使用。");
+    }
+    const user = { id: crypto.randomUUID(), username, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+    accountStore.users.push(user);
+    // 旧版 token 模式为单人使用；保留既有邮箱和邮件，并将其归属给首位注册用户。
+    if (accountStore.users.length === 1) {
+      for (const account of accountStore.accounts) if (!account.ownerId) account.ownerId = user.id;
+    }
+    await saveStore();
+    setSessionCookie(response, createSession(user.id));
+    return sendJson(response, 201, { ok: true, user: { username: user.username } });
+  }
+
+  if (request.method === "POST" && request.url === "/api/auth/login") {
+    const payload = await readJson(request);
+    const username = typeof payload.username === "string" ? payload.username.trim().toLowerCase() : "";
+    const password = typeof payload.password === "string" ? payload.password : "";
+    const user = accountStore.users.find((item) => item.username === username);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      throw new HttpError(401, "INVALID_CREDENTIALS", "用户名或密码不正确。");
+    }
+    setSessionCookie(response, createSession(user.id));
+    return sendJson(response, 200, { ok: true, user: { username: user.username } });
+  }
+
+  if (request.method === "POST" && request.url === "/api/auth/logout") {
+    const token = parseCookies(request).mail_session;
+    if (token) sessions.delete(token);
+    clearSessionCookie(response);
+    return sendJson(response, 200, { ok: true });
+  }
+
+  const user = getCurrentUser(request);
+  if (!user) {
+    return sendJson(response, 401, { ok: false, error: { code: "UNAUTHORIZED", message: "请先登录。" } });
+  }
+
+  if (request.method === "GET" && request.url === "/api/auth/me") {
+    return sendJson(response, 200, { ok: true, user: { username: user.username } });
   }
 
   if (request.method === "GET" && request.url === "/api/accounts") {
-    return sendJson(response, 200, { ok: true, accounts: accountStore.accounts.map(publicAccount) });
+    return sendJson(response, 200, { ok: true, accounts: ownedAccounts(user.id).map(publicAccount) });
   }
 
   const accountMessages = request.url?.match(/^\/api\/accounts\/([^/]+)\/messages$/);
   if (request.method === "GET" && accountMessages) {
     const accountId = decodeURIComponent(accountMessages[1]);
-    if (!accountStore.accounts.some((account) => account.id === accountId)) {
+    if (!getOwnedAccount(user.id, accountId)) {
       throw new HttpError(404, "ACCOUNT_NOT_FOUND", "账号不存在。");
     }
     return sendJson(response, 200, { ok: true, accountId, messages: getSavedMessages(accountId) });
+  }
+
+  const accountEgress = request.url?.match(/^\/api\/accounts\/([^/]+)\/egress$/);
+  if (request.method === "GET" && accountEgress) {
+    const accountId = decodeURIComponent(accountEgress[1]);
+    const account = getOwnedAccount(user.id, accountId);
+    if (!account) throw new HttpError(404, "ACCOUNT_NOT_FOUND", "账号不存在。");
+    try {
+      return sendJson(response, 200, { ok: true, egress: await resolveProxyEgress(account) });
+    } catch (error) {
+      console.error(`Proxy egress lookup failed for ${account.email}: ${redactConnectionSecrets(String(error?.message || error))}`);
+      throw new HttpError(502, "EGRESS_LOOKUP_FAILED", "无法确认当前代理出口。请稍后重试。", redactConnectionSecrets(String(error?.message || error)));
+    }
   }
 
   if (request.method === "POST" && request.url === "/api/accounts/import") {
@@ -411,7 +574,7 @@ async function handleRequest(request, response) {
 
     const imported = [];
     const skipped = [];
-    const knownEmails = new Set(accountStore.accounts.map((account) => account.email));
+    const knownEmails = new Set(ownedAccounts(user.id).map((account) => account.email));
 
     for (const item of payload.accounts) {
       const email = typeof item?.email === "string" ? item.email.trim().toLowerCase() : "";
@@ -427,6 +590,7 @@ async function handleRequest(request, response) {
 
       const account = {
         id: crypto.randomUUID(),
+        ownerId: user.id,
         email,
         passwordEncrypted: encrypt(password),
         proxySessionId: createUniqueSessionId(),
@@ -445,7 +609,7 @@ async function handleRequest(request, response) {
   const accountNote = request.url?.match(/^\/api\/accounts\/([^/]+)\/note$/);
   if (request.method === "PUT" && accountNote) {
     const accountId = decodeURIComponent(accountNote[1]);
-    const account = accountStore.accounts.find((item) => item.id === accountId);
+    const account = getOwnedAccount(user.id, accountId);
     if (!account) throw new HttpError(404, "ACCOUNT_NOT_FOUND", "账号不存在。");
 
     const payload = await readJson(request);
@@ -465,7 +629,7 @@ async function handleRequest(request, response) {
   if (request.method === "POST" && accountAction) {
     const accountId = decodeURIComponent(accountAction[1]);
     const action = accountAction[2];
-    const account = accountStore.accounts.find((item) => item.id === accountId);
+    const account = getOwnedAccount(user.id, accountId);
     if (!account) throw new HttpError(404, "ACCOUNT_NOT_FOUND", "账号不存在。");
 
     if (action === "enable" || action === "disable") {

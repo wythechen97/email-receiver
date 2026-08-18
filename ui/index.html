@@ -6,10 +6,32 @@
     <meta name="color-scheme" content="dark" />
     <title>GMX Mail Console</title>
     <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .auth-shell{display:grid;place-items:center;min-height:100dvh;padding:24px;background:radial-gradient(650px 500px at 8% 92%,rgb(17 92 82 / .36),transparent 66%),radial-gradient(800px 600px at 92% 4%,rgb(26 80 112 / .4),transparent 68%)}.auth-frame{display:grid;width:min(100%,980px);min-height:590px;grid-template-columns:minmax(300px,.92fr) minmax(390px,1.08fr);overflow:hidden;border:1px solid rgb(155 185 215 / .2);border-radius:24px;background:rgb(12 24 39 / .84);box-shadow:0 28px 80px rgb(0 0 0 / .35)}.auth-aside{position:relative;display:flex;flex-direction:column;justify-content:space-between;padding:42px;overflow:hidden;border-right:1px solid rgb(155 185 215 / .14);background:linear-gradient(145deg,rgb(19 53 68 / .82),rgb(10 28 44 / .94))}.auth-aside::after{position:absolute;right:-100px;bottom:-130px;width:280px;height:280px;border:1px solid rgb(112 235 203 / .2);border-radius:50%;box-shadow:0 0 0 34px rgb(112 235 203 / .035),0 0 0 70px rgb(112 235 203 / .025);content:""}.auth-aside .brand{padding:0}.auth-aside-copy{position:relative;z-index:1;max-width:315px}.auth-aside-copy h2{margin:22px 0 14px;font-size:clamp(2rem,3vw,2.55rem);letter-spacing:-.06em;line-height:1.06}.auth-aside-copy p{color:#b7c8d9;font-size:.95rem;line-height:1.7}.auth-points{display:grid;gap:14px;margin:30px 0 0;padding:0;list-style:none}.auth-points li{display:flex;align-items:center;gap:10px;color:#d9e7f3;font-size:.84rem}.auth-check{display:grid;flex:0 0 21px;place-items:center;width:21px;height:21px;border:1px solid rgb(97 213 176 / .4);border-radius:50%;background:rgb(97 213 176 / .12);color:var(--accent);font-size:.75rem;font-weight:800}.auth-status{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:36px;color:#a6bdcf;font-size:.73rem}.auth-status-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 5px rgb(97 213 176 / .11)}.auth-card{display:flex;flex-direction:column;justify-content:center;padding:clamp(32px,6vw,64px);background:linear-gradient(145deg,rgb(18 33 51 / .82),rgb(10 20 33 / .94))}.auth-kicker{margin-bottom:11px;color:var(--accent);font-size:.69rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase}.auth-card h2{font-size:1.75rem;letter-spacing:-.045em}.auth-intro{margin:10px 0 26px;color:var(--muted);font-size:.88rem;line-height:1.6}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:4px;margin-bottom:26px;border:1px solid rgb(155 185 215 / .12);border-radius:12px;background:#091522}.auth-tab{min-height:42px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:.84rem;font-weight:750;transition:background .18s ease,color .18s ease,box-shadow .18s ease}.auth-tab:hover{color:var(--text)}.auth-tab.active{background:#233a55;box-shadow:0 3px 12px rgb(0 0 0 / .2);color:var(--text)}#auth-form{display:grid;gap:18px}.auth-field{display:grid;gap:7px}.auth-field label{margin:0;color:#c7d6e4;font-size:.78rem}.auth-field label span{color:var(--accent)}.auth-field input{min-height:46px;padding:12px 13px;border-color:rgb(85 113 142 / .55);background:rgb(4 14 25 / .6)}.auth-field input::placeholder{color:#657b93}.password-wrap{position:relative}.password-wrap input{padding-right:52px}.password-toggle{position:absolute;top:50%;right:5px;display:grid;place-items:center;width:40px;height:40px;border:0;border-radius:8px;transform:translateY(-50%);background:transparent;color:var(--muted)}.password-toggle:hover{background:rgb(255 255 255 / .07);color:var(--text)}.password-toggle svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8}.auth-helper{margin:-8px 0 0;color:var(--subtle);font-size:.72rem;line-height:1.5}#auth-form .button{min-height:48px;margin-top:3px;border-radius:11px;font-size:.9rem}.auth-footer{margin:22px 0 0;color:var(--subtle);font-size:.72rem;line-height:1.6;text-align:center}.auth-footer strong{color:#9eb5c8;font-weight:650}.proxy-egress-info{display:inline-flex;align-items:center;max-width:100%;margin-top:10px;padding:5px 9px;border:1px solid rgb(97 213 176 / .25);border-radius:7px;background:rgb(97 213 176 / .09);color:#a8ead6;font:.72rem/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;overflow-wrap:anywhere}@media(max-width:720px){.auth-shell{padding:16px;align-items:start}.auth-frame{min-height:0;grid-template-columns:1fr}.auth-aside{min-height:230px;padding:27px 26px;border-right:0;border-bottom:1px solid rgb(155 185 215 / .14)}.auth-aside-copy h2{margin:18px 0 9px;font-size:1.85rem}.auth-aside-copy p{font-size:.84rem}.auth-points{display:none}.auth-status{margin-top:22px}.auth-card{padding:31px 26px}}@media(max-width:400px){.auth-shell{padding:0}.auth-frame{border-right:0;border-left:0;border-radius:0}.auth-aside,.auth-card{padding-right:20px;padding-left:20px}}
+    </style>
   </head>
   <body>
     <a class="skip-link" href="#main-content">跳至主要内容</a>
-    <div class="app-shell">
+    <main id="auth-view" class="auth-shell">
+      <section class="auth-frame" aria-labelledby="auth-title">
+        <aside class="auth-aside">
+          <div class="brand"><span class="brand-mark">G</span><div><p class="eyebrow">LOCAL MAIL</p><h1>GMX Console</h1></div></div>
+          <div class="auth-aside-copy"><h2>你的邮箱，<br />只属于你。</h2><p>在一个专属的本地工作台中管理 GMX 邮箱，账号与邮件数据始终按用户独立隔离。</p><ul class="auth-points"><li><span class="auth-check">✓</span>独立账号与邮件数据空间</li><li><span class="auth-check">✓</span>GMX 密码加密保存</li><li><span class="auth-check">✓</span>随时退出当前设备</li></ul></div>
+          <p class="auth-status"><span class="auth-status-dot"></span>本地服务已就绪</p>
+        </aside>
+        <section class="auth-card">
+          <p id="auth-kicker" class="auth-kicker">WELCOME BACK</p><h2 id="auth-title">登录你的工作台</h2><p id="auth-intro" class="auth-intro">输入本地账户凭据，继续管理你的邮箱。</p>
+          <div class="auth-tabs" role="tablist" aria-label="账户操作"><button class="auth-tab active" data-auth-mode="login" type="button" role="tab" aria-selected="true">登录</button><button class="auth-tab" data-auth-mode="register" type="button" role="tab" aria-selected="false">创建账户</button></div>
+          <form id="auth-form">
+            <div class="auth-field"><label for="auth-username">用户名 <span aria-hidden="true">*</span></label><input id="auth-username" autocomplete="username" minlength="3" maxlength="32" required placeholder="例如：alex_chen" /></div>
+            <div class="auth-field"><label for="auth-password">密码 <span aria-hidden="true">*</span></label><div class="password-wrap"><input id="auth-password" type="password" autocomplete="current-password" minlength="8" required placeholder="输入你的密码" /><button id="password-toggle" class="password-toggle" type="button" aria-label="显示密码" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></svg></button></div><p id="auth-helper" class="auth-helper">至少 8 个字符。</p></div>
+            <button id="auth-submit" class="button primary full" type="submit">登录并继续</button>
+          </form>
+          <p id="auth-result" class="form-message" aria-live="polite"></p><p class="auth-footer"><strong>你的会话仅保存在此设备。</strong><br />退出登录即可安全结束当前会话。</p>
+        </section>
+      </section>
+    </main>
+    <div id="app-shell" class="app-shell hidden">
       <aside class="sidebar">
         <div class="brand"><span class="brand-mark">G</span><div><p class="eyebrow">LOCAL MAIL</p><h1>GMX Console</h1></div></div>
         <nav class="main-nav" aria-label="主菜单">
@@ -24,10 +46,9 @@
           </div>
         </nav>
         <div class="sidebar-footer">
-          <label for="api-token">本地 API 令牌</label>
-          <input id="api-token" type="password" autocomplete="off" placeholder="输入 API Token" />
-          <button id="connect-button" class="button primary full">连接服务</button>
-          <p id="connection-status" class="status">未连接</p>
+          <p id="signed-in-user" class="status"></p>
+          <button id="logout-button" class="button secondary full" type="button">退出登录</button>
+          <p id="connection-status" class="status">已登录</p>
         </div>
       </aside>
       <main id="main-content" class="workspace" tabindex="-1">
@@ -51,7 +72,7 @@
         </section>
         <section id="mailboxes-view" class="view hidden">
           <div class="page-heading mailbox-heading">
-            <div><p class="eyebrow">MAILBOX</p><div class="mailbox-title-row"><h2 id="mailbox-title">邮箱列表</h2><input id="account-note" class="account-note" type="text" maxlength="200" placeholder="添加备注" aria-label="邮箱备注" disabled /></div><p id="mailbox-subtitle">选择一个邮箱，查看已保存的邮件。</p><p id="account-note-status" class="note-status" aria-live="polite"></p></div>
+            <div><p class="eyebrow">MAILBOX</p><div class="mailbox-title-row"><h2 id="mailbox-title">邮箱列表</h2><input id="account-note" class="account-note" type="text" maxlength="200" placeholder="添加备注" aria-label="邮箱备注" disabled /></div><p id="mailbox-subtitle">选择一个邮箱，查看已保存的邮件。</p><p id="proxy-egress-info" class="proxy-egress-info" hidden></p><p id="account-note-status" class="note-status" aria-live="polite"></p></div>
             <div class="toolbar"><button id="fetch-button" class="button primary" disabled>收取邮件</button><button id="renew-session-button" class="button secondary" disabled>更换出口</button><button id="refresh-button" class="icon-button" type="button" title="刷新列表" aria-label="刷新列表"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0 2.18 5.5M20 4v7h-7" /></svg></button></div>
           </div>
           <section class="mail-workspace">
