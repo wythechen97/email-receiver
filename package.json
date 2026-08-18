@@ -1,0 +1,13 @@
+{
+  "name": "gmx-on-demand-mail",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env server.mjs"
+  },
+  "dependencies": {
+    "imapflow": "^1.6.5",
+    "mailparser": "^3.9.0"
+  }
+}

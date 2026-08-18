@@ -1,0 +1,14 @@
+services:
+  email-receiver:
+    build: .
+    container_name: email-receiver
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+    ports:
+      - "8787:8787"
+    volumes:
+      # 将 NAS 项目目录中的 data/ 绑定到容器，账号与邮件数据库不会保存在容器层。
+      - ./data:/app/data

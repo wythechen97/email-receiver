@@ -1,0 +1,10 @@
+# Secrets and persistent application data
+.env
+data/
+
+# Dependencies and local tooling
+node_modules/
+.idea/
+
+# Logs
+npm-debug.log*

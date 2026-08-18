@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>GMX Mail Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">G</span><div><p class="eyebrow">LOCAL MAIL</p><h1>GMX Console</h1></div></div>
+        <nav class="main-nav" aria-label="主菜单">
+          <button class="nav-item active" type="button" data-view="import"><span>01</span>批量导入 GMX 账号</button>
+          <div class="mailbox-nav-group">
+            <button id="mailboxes-menu-button" class="nav-item" type="button" data-view="mailboxes" aria-expanded="false" aria-controls="mailbox-menu"><span>02</span>邮箱列表 <i aria-hidden="true">⌄</i></button>
+            <div id="mailbox-menu" class="mailbox-menu hidden">
+              <div class="mailbox-menu-heading"><span>选择邮箱</span><span id="account-count" class="count"></span></div>
+              <div id="accounts-empty" class="sidebar-empty">连接后显示邮箱。</div>
+              <div id="accounts-list" class="accounts-list" aria-live="polite"></div>
+            </div>
+          </div>
+        </nav>
+        <div class="sidebar-footer">
+          <label for="api-token">本地 API 令牌</label>
+          <input id="api-token" type="password" autocomplete="off" placeholder="输入 API Token" />
+          <button id="connect-button" class="button primary full">连接服务</button>
+          <p id="connection-status" class="status">未连接</p>
+        </div>
+      </aside>
+      <main class="workspace">
+        <section id="import-view" class="view">
+          <div class="page-heading"><div><p class="eyebrow">ACCOUNT SETUP</p><h2>批量导入 GMX 账号</h2><p>每个账号会自动获得独立、持久的代理 Session。</p></div></div>
+          <section class="panel import-panel">
+            <div class="section-title"><h3>账号凭据</h3><button id="import-button" class="button primary">导入账号</button></div>
+            <label for="import-input">每行一个账号，格式：<code>邮箱 | IMAP 密码</code></label>
+            <textarea id="import-input" rows="10" spellcheck="false" placeholder="first@gmx.com | 密码一&#10;second@gmx.net | 密码二"></textarea>
+            <p class="hint">密码只用于加密存储，且不会在界面中回显。</p>
+            <p id="import-result" class="form-message" aria-live="polite"></p>
+          </section>
+        </section>
+        <section id="mailboxes-view" class="view hidden">
+          <div class="page-heading mailbox-heading">
+            <div><p class="eyebrow">MAILBOX</p><h2 id="mailbox-title">邮箱列表</h2><p id="mailbox-subtitle">选择一个邮箱，查看已保存的邮件。</p></div>
+            <div class="toolbar"><button id="fetch-button" class="button primary" disabled>收取邮件</button><button id="renew-session-button" class="button secondary" disabled>更换出口</button><button id="refresh-button" class="icon-button" type="button" title="刷新列表" aria-label="刷新列表">↻</button></div>
+          </div>
+          <section class="mail-workspace">
+            <section class="message-column"><div class="column-heading"><span>已保存邮件</span><span id="mail-count" class="count"></span></div><div id="messages-empty" class="empty compact">从左侧选择邮箱后查看邮件。</div><div id="message-list" class="message-list" aria-label="邮件列表"></div></section>
+            <article id="message-detail" class="message-detail empty">从左侧选择邮箱，再从邮件列表选择一封邮件阅读。</article>
+          </section>
+        </section>
+      </main>
+    </div>
+    <template id="account-template"><button class="account-item" type="button"><span class="account-avatar"></span><span class="account-content"><strong class="account-email"></strong><small class="last-fetch"></small></span><span class="account-state"></span></button></template>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
