@@ -153,25 +153,25 @@ $("#add-account-button").addEventListener("click", async () => {
   const password = accountPasswordInput.value;
   if (!email || !password) {
     message.textContent = "请填写 GMX 邮箱和 IMAP 密码。";
-    message.classList.remove("success");
+    message.className = "form-message error";
     return;
   }
   try {
     const result = await api("/api/accounts/import", { method: "POST", body: JSON.stringify({ accounts: [{ email, password }] }) });
     if (result.imported.length) {
       message.textContent = `已添加 ${result.imported[0].email}。`;
-      message.classList.add("success");
+      message.className = "form-message success";
       accountEmailInput.value = "";
       accountPasswordInput.value = "";
       await loadAccounts();
     } else {
       const reason = result.skipped[0]?.reason;
       message.textContent = reason === "ALREADY_IMPORTED" ? "该邮箱已添加。" : "邮箱格式或 IMAP 密码无效。";
-      message.classList.remove("success");
+      message.className = "form-message error";
     }
   } catch (error) {
     message.textContent = error.message;
-    message.classList.remove("success");
+    message.className = "form-message error";
   }
 });
 $("#import-button").addEventListener("click", async () => {
@@ -183,17 +183,18 @@ $("#import-button").addEventListener("click", async () => {
   const message = $("#import-result");
   if (!accounts.length || accounts.some((account) => !account || !account.password)) {
     message.textContent = "格式错误：每行必须是“邮箱----IMAP 密码”（也兼容“邮箱 | IMAP 密码”）。";
+    message.className = "form-message error";
     return;
   }
   try {
     const result = await api("/api/accounts/import", { method: "POST", body: JSON.stringify({ accounts }) });
     message.textContent = `已导入 ${result.imported.length} 个账号；跳过 ${result.skipped.length} 个。`;
-    message.classList.add("success");
+    message.className = "form-message success";
     $("#import-input").value = "";
     await loadAccounts();
   } catch (error) {
     message.textContent = error.message;
-    message.classList.remove("success");
+    message.className = "form-message error";
   }
 });
 document.querySelectorAll(".nav-item").forEach((item) => item.addEventListener("click", () => setView(item.dataset.view)));
