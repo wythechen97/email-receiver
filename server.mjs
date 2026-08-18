@@ -171,6 +171,7 @@ function publicAccount(account) {
   return {
     id: account.id,
     email: account.email,
+    note: account.note || "",
     enabled: account.enabled,
     proxy: {
       host: config.proxyHost,
@@ -439,6 +440,25 @@ async function handleRequest(request, response) {
 
     await saveStore();
     return sendJson(response, 201, { ok: true, imported, skipped });
+  }
+
+  const accountNote = request.url?.match(/^\/api\/accounts\/([^/]+)\/note$/);
+  if (request.method === "PUT" && accountNote) {
+    const accountId = decodeURIComponent(accountNote[1]);
+    const account = accountStore.accounts.find((item) => item.id === accountId);
+    if (!account) throw new HttpError(404, "ACCOUNT_NOT_FOUND", "账号不存在。");
+
+    const payload = await readJson(request);
+    if (typeof payload.note !== "string") {
+      throw new HttpError(400, "INVALID_NOTE", "备注必须是文本。");
+    }
+    const note = payload.note.trim();
+    if (note.length > 200) {
+      throw new HttpError(400, "NOTE_TOO_LONG", "备注不能超过 200 个字符。");
+    }
+    account.note = note;
+    await saveStore();
+    return sendJson(response, 200, { ok: true, account: publicAccount(account) });
   }
 
   const accountAction = request.url?.match(/^\/api\/accounts\/([^/]+)\/(fetch|enable|disable|renew-session)$/);

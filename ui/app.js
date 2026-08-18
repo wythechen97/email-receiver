@@ -1,6 +1,9 @@
 const state = { token: sessionStorage.getItem("gmx-api-token") || "", accounts: [], selectedAccount: null, messages: [] };
 const $ = (selector, root = document) => root.querySelector(selector);
 const tokenInput = $("#api-token");
+const accountNoteInput = $("#account-note");
+const accountEmailInput = $("#account-email-input");
+const accountPasswordInput = $("#account-password-input");
 tokenInput.value = state.token;
 
 function setConnectionStatus(text, kind = "") { const status = $("#connection-status"); status.textContent = text; status.className = `status ${kind}`; }
@@ -42,7 +45,7 @@ function renderAccounts() {
     element.classList.toggle("selected", state.selectedAccount?.id === account.id);
     $(".account-avatar", element).textContent = account.email[0].toUpperCase();
     $(".account-email", element).textContent = account.email;
-    $(".last-fetch", element).textContent = account.lastFetchAt ? `上次收件 · ${formatDate(account.lastFetchAt)}` : "尚未收件";
+    $(".last-fetch", element).textContent = account.note || (account.lastFetchAt ? `上次收件 · ${formatDate(account.lastFetchAt)}` : "尚未收件");
     $(".account-state", element).textContent = account.enabled ? "启用" : "停用";
     $(".account-state", element).classList.toggle("disabled", !account.enabled);
     element.addEventListener("click", () => selectAccount(account)); list.append(element);
@@ -54,6 +57,9 @@ async function selectAccount(account, shouldRender = true) {
   state.messages = [];
   $("#mailbox-title").textContent = account.email;
   $("#mailbox-subtitle").textContent = account.enabled ? "已打开邮箱 · 邮件内容保存在本地" : "此账号已停用，无法收取新邮件。";
+  accountNoteInput.disabled = false;
+  accountNoteInput.value = account.note || "";
+  setNoteStatus("");
   $("#fetch-button").disabled = !account.enabled;
   $("#renew-session-button").disabled = false;
   if (shouldRender) renderAccounts();
@@ -110,9 +116,85 @@ async function fetchMessages() {
 }
 async function renewSession() { const account = state.selectedAccount; if (!account || !confirm(`确定为 ${account.email} 更换代理出口吗？`)) return; try { await api(`/api/accounts/${encodeURIComponent(account.id)}/renew-session`, { method: "POST" }); await loadAccounts(); } catch (error) { alert(error.message); } }
 
+function setNoteStatus(text, kind = "") { const status = $("#account-note-status"); status.textContent = text; status.className = `note-status ${kind}`; }
+async function saveAccountNote() {
+  const account = state.selectedAccount;
+  if (!account || accountNoteInput.disabled) return;
+  const note = accountNoteInput.value.trim();
+  if (note === (account.note || "")) return;
+  const accountId = account.id;
+  accountNoteInput.disabled = true;
+  setNoteStatus("正在保存…");
+  try {
+    const result = await api(`/api/accounts/${encodeURIComponent(accountId)}/note`, { method: "PUT", body: JSON.stringify({ note }) });
+    const updated = result.account;
+    const index = state.accounts.findIndex((item) => item.id === accountId);
+    if (index >= 0) state.accounts[index] = updated;
+    if (state.selectedAccount?.id === accountId) {
+      state.selectedAccount = updated;
+      accountNoteInput.value = updated.note;
+      setNoteStatus("已保存", "success");
+      renderAccounts();
+    }
+  } catch (error) {
+    setNoteStatus(`保存失败：${error.message}`, "error");
+  } finally {
+    if (state.selectedAccount?.id === accountId) accountNoteInput.disabled = false;
+  }
+}
+
 $("#connect-button").addEventListener("click", async () => { state.token = tokenInput.value.trim(); sessionStorage.setItem("gmx-api-token", state.token); try { await loadAccounts(); } catch (error) { sessionStorage.removeItem("gmx-api-token"); setConnectionStatus(error.message, "error"); } });
 $("#refresh-button").addEventListener("click", () => loadAccounts().catch((error) => setConnectionStatus(error.message, "error")));
 $("#fetch-button").addEventListener("click", fetchMessages); $("#renew-session-button").addEventListener("click", renewSession);
-$("#import-button").addEventListener("click", async () => { const accounts = $("#import-input").value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => { const index = line.indexOf("|"); return index < 1 ? null : { email: line.slice(0, index).trim(), password: line.slice(index + 1).trim() }; }); const message = $("#import-result"); if (!accounts.length || accounts.some((account) => !account)) { message.textContent = "格式错误：每行必须是“邮箱 | IMAP 密码”。"; return; } try { const result = await api("/api/accounts/import", { method: "POST", body: JSON.stringify({ accounts }) }); message.textContent = `已导入 ${result.imported.length} 个账号；跳过 ${result.skipped.length} 个。`; message.classList.add("success"); $("#import-input").value = ""; await loadAccounts(); } catch (error) { message.textContent = error.message; message.classList.remove("success"); } });
+accountNoteInput.addEventListener("blur", saveAccountNote);
+$("#add-account-button").addEventListener("click", async () => {
+  const message = $("#add-account-result");
+  const email = accountEmailInput.value.trim();
+  const password = accountPasswordInput.value;
+  if (!email || !password) {
+    message.textContent = "请填写 GMX 邮箱和 IMAP 密码。";
+    message.classList.remove("success");
+    return;
+  }
+  try {
+    const result = await api("/api/accounts/import", { method: "POST", body: JSON.stringify({ accounts: [{ email, password }] }) });
+    if (result.imported.length) {
+      message.textContent = `已添加 ${result.imported[0].email}。`;
+      message.classList.add("success");
+      accountEmailInput.value = "";
+      accountPasswordInput.value = "";
+      await loadAccounts();
+    } else {
+      const reason = result.skipped[0]?.reason;
+      message.textContent = reason === "ALREADY_IMPORTED" ? "该邮箱已添加。" : "邮箱格式或 IMAP 密码无效。";
+      message.classList.remove("success");
+    }
+  } catch (error) {
+    message.textContent = error.message;
+    message.classList.remove("success");
+  }
+});
+$("#import-button").addEventListener("click", async () => {
+  const accounts = $("#import-input").value.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+    const separator = line.includes("----") ? "----" : "|";
+    const index = line.indexOf(separator);
+    return index < 1 ? null : { email: line.slice(0, index).trim(), password: line.slice(index + separator.length).trim() };
+  });
+  const message = $("#import-result");
+  if (!accounts.length || accounts.some((account) => !account || !account.password)) {
+    message.textContent = "格式错误：每行必须是“邮箱----IMAP 密码”（也兼容“邮箱 | IMAP 密码”）。";
+    return;
+  }
+  try {
+    const result = await api("/api/accounts/import", { method: "POST", body: JSON.stringify({ accounts }) });
+    message.textContent = `已导入 ${result.imported.length} 个账号；跳过 ${result.skipped.length} 个。`;
+    message.classList.add("success");
+    $("#import-input").value = "";
+    await loadAccounts();
+  } catch (error) {
+    message.textContent = error.message;
+    message.classList.remove("success");
+  }
+});
 document.querySelectorAll(".nav-item").forEach((item) => item.addEventListener("click", () => setView(item.dataset.view)));
 if (state.token) loadAccounts().catch((error) => setConnectionStatus(error.message, "error"));

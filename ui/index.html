@@ -31,18 +31,26 @@
       </aside>
       <main class="workspace">
         <section id="import-view" class="view">
-          <div class="page-heading"><div><p class="eyebrow">ACCOUNT SETUP</p><h2>批量导入 GMX 账号</h2><p>每个账号会自动获得独立、持久的代理 Session。</p></div></div>
+          <div class="page-heading"><div><p class="eyebrow">ACCOUNT SETUP</p><h2>添加 GMX 账号</h2><p>每个账号会自动获得独立、持久的代理 Session。</p></div></div>
+          <section class="panel single-account-panel">
+            <div class="section-title"><h3>单个添加</h3><button id="add-account-button" class="button primary" type="button">添加邮箱</button></div>
+            <div class="account-form-fields">
+              <div><label for="account-email-input">GMX 邮箱</label><input id="account-email-input" type="email" autocomplete="username" placeholder="name@gmx.com" /></div>
+              <div><label for="account-password-input">IMAP 密码</label><input id="account-password-input" type="password" autocomplete="current-password" placeholder="输入 IMAP 密码" /></div>
+            </div>
+            <p id="add-account-result" class="form-message" aria-live="polite"></p>
+          </section>
           <section class="panel import-panel">
-            <div class="section-title"><h3>账号凭据</h3><button id="import-button" class="button primary">导入账号</button></div>
-            <label for="import-input">每行一个账号，格式：<code>邮箱 | IMAP 密码</code></label>
-            <textarea id="import-input" rows="10" spellcheck="false" placeholder="first@gmx.com | 密码一&#10;second@gmx.net | 密码二"></textarea>
+            <div class="section-title"><h3>批量导入</h3><button id="import-button" class="button primary">导入账号</button></div>
+            <label for="import-input">每行一个账号，格式：<code>邮箱----IMAP 密码</code>（也兼容 <code>邮箱 | IMAP 密码</code>）</label>
+            <textarea id="import-input" rows="10" spellcheck="false" placeholder="first@gmx.com----密码一&#10;second@gmx.net----密码二"></textarea>
             <p class="hint">密码只用于加密存储，且不会在界面中回显。</p>
             <p id="import-result" class="form-message" aria-live="polite"></p>
           </section>
         </section>
         <section id="mailboxes-view" class="view hidden">
           <div class="page-heading mailbox-heading">
-            <div><p class="eyebrow">MAILBOX</p><h2 id="mailbox-title">邮箱列表</h2><p id="mailbox-subtitle">选择一个邮箱，查看已保存的邮件。</p></div>
+            <div><p class="eyebrow">MAILBOX</p><div class="mailbox-title-row"><h2 id="mailbox-title">邮箱列表</h2><input id="account-note" class="account-note" type="text" maxlength="200" placeholder="添加备注" aria-label="邮箱备注" disabled /></div><p id="mailbox-subtitle">选择一个邮箱，查看已保存的邮件。</p><p id="account-note-status" class="note-status" aria-live="polite"></p></div>
             <div class="toolbar"><button id="fetch-button" class="button primary" disabled>收取邮件</button><button id="renew-session-button" class="button secondary" disabled>更换出口</button><button id="refresh-button" class="icon-button" type="button" title="刷新列表" aria-label="刷新列表">↻</button></div>
           </div>
           <section class="mail-workspace">
