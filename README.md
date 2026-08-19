@@ -81,7 +81,7 @@ curl -X POST http://127.0.0.1:8787/api/accounts/import \
   -H "Content-Type: application/json" \
   -d '{
     "accounts": [
-      { "email": "first@gmx.com", "password": "GMX_IMAP_PASSWORD_1" },
+      { "email": "first@gmx.us", "password": "GMX_IMAP_PASSWORD_1" },
       { "email": "second@gmx.net", "password": "GMX_IMAP_PASSWORD_2" }
     ]
   }'

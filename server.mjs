@@ -14,6 +14,7 @@ const dataDir = path.join(rootDir, "data");
 const accountsPath = path.join(dataDir, "accounts.json");
 const mailDatabasePath = path.join(dataDir, "mail.sqlite");
 const uiDir = path.join(rootDir, "ui");
+const GMX_EMAIL_PATTERN = /^.+@gmx\.(com|us|net|de|at|ch)$/i;
 
 const config = {
   port: Number(process.env.PORT || 8787),
@@ -582,7 +583,7 @@ async function handleRequest(request, response) {
     for (const item of payload.accounts) {
       const email = typeof item?.email === "string" ? item.email.trim().toLowerCase() : "";
       const password = typeof item?.password === "string" ? item.password : "";
-      if (!/^.+@gmx\.(com|net|de|at|ch)$/i.test(email) || !password) {
+      if (!GMX_EMAIL_PATTERN.test(email) || !password) {
         skipped.push({ email: email || null, reason: "INVALID_EMAIL_OR_PASSWORD" });
         continue;
       }
