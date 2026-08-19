@@ -491,6 +491,9 @@ async function handleRequest(request, response) {
   if (request.method === "GET" && request.url === "/styles.css") {
     return serveUiFile(response, "styles.css", "text/css; charset=utf-8");
   }
+  if (request.method === "GET" && request.url === "/auth.css") {
+    return serveUiFile(response, "auth.css", "text/css; charset=utf-8");
+  }
 
   if (request.method === "POST" && request.url === "/api/auth/register") {
     const payload = await readJson(request);
