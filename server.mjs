@@ -212,7 +212,10 @@ async function resolveProxyEgress(account) {
       secureSocket.once("error", reject);
     });
     const responsePromise = readResponse(secureSocket);
-    secureSocket.end("GET /?format=json HTTP/1.1\r\nHost: api.ipify.org\r\nConnection: close\r\nAccept: application/json\r\n\r\n");
+    // 不能在请求发送后立即 half-close：部分 SOCKS5 服务会随之关闭隧道，
+    // 导致 HTTP 响应尚未转发回来就触发 `end`，从而误报出口查询失败。
+    // HTTP 的 Connection: close 会由服务端在响应完成后关闭连接。
+    secureSocket.write("GET /?format=json HTTP/1.1\r\nHost: api.ipify.org\r\nConnection: close\r\nAccept: application/json\r\n\r\n");
     const response = await responsePromise;
     const [, body = ""] = response.split("\r\n\r\n", 2);
     const ip = JSON.parse(body).ip;
