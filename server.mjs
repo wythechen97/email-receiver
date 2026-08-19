@@ -310,7 +310,9 @@ function verifyPassword(password, stored) {
 }
 
 function ownedAccounts(userId) {
-  return accountStore.accounts.filter((account) => account.ownerId === userId);
+  return accountStore.accounts
+    .filter((account) => account.ownerId === userId)
+    .sort((left, right) => (Date.parse(right.createdAt) || 0) - (Date.parse(left.createdAt) || 0));
 }
 
 function getOwnedAccount(userId, accountId) {
